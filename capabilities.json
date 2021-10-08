@@ -1,38 +1,40 @@
 {
     "dataRoles": [
         {
-            "displayName": "Category Data",
-            "name": "category",
-            "kind": "Grouping"
-        },
-        {
-            "displayName": "Measure Data",
+            "displayName": "Data",
             "name": "measure",
             "kind": "Measure"
         }
     ],
     "objects": {
-        "dataPoint": {
-            "displayName": "Data colors",
+        "title":{
+            "displayName": "Title",
             "properties": {
-                "defaultColor": {
-                    "displayName": "Default color",
+                "text": {
+                    "displayName": "Text",
                     "type": {
-                        "fill": {
-                            "solid": {
-                                "color": true
-                            }
-                        }
+                        "text": true
                     }
                 },
-                "showAllDataPoints": {
-                    "displayName": "Show all",
+                "hide": {
+                    "displayName": "Hide",
                     "type": {
                         "bool": true
                     }
                 },
+                "fontSizeTitle": {
+                    "displayName": "Font size title",
+                    "type": {
+                        "numeric": true
+                    }
+                }
+            }
+        },
+        "colorSelector": {
+            "displayName": "Data Colors",
+            "properties": {
                 "fill": {
-                    "displayName": "Fill",
+                    "displayName": "Color",
                     "type": {
                         "fill": {
                             "solid": {
@@ -40,19 +42,16 @@
                             }
                         }
                     }
-                },
-                "fillRule": {
-                    "displayName": "Color saturation",
+                }
+            }
+        },
+        "generalView": {
+            "displayName": "General View",
+            "properties": {
+                "arrow": {
+                    "displayName": "Enable arrow up",
                     "type": {
-                        "fill": {}
-                    }
-                },
-                 "fontSize": {
-                    "displayName": "Text Size",
-                    "type": {
-                        "formatting": {
-                            "fontSize": true
-                        }
+                        "bool": true
                     }
                 }
             }
@@ -60,15 +59,7 @@
     },
     "dataViewMappings": [
         {
-            "categorical": {
-                "categories": {
-                    "for": {
-                        "in": "category"
-                    },
-                    "dataReductionAlgorithm": {
-                        "top": {}
-                    }
-                },
+            "categorical": {                
                 "values": {
                     "select": [
                         {
@@ -78,7 +69,15 @@
                         }
                     ]
                 }
-            }
+            },
+            "conditions": [
+                {
+                    "measure": {
+                        "max": 1
+                    }
+                }
+            ]
         }
-    ]
+    ],
+    "supportsMultiVisualSelection": true
 }

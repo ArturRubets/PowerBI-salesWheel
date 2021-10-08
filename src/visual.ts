@@ -1,28 +1,3 @@
-/*
-*  Power BI Visual CLI
-*
-*  Copyright (c) Microsoft Corporation
-*  All rights reserved.
-*  MIT License
-*
-*  Permission is hereby granted, free of charge, to any person obtaining a copy
-*  of this software and associated documentation files (the ""Software""), to deal
-*  in the Software without restriction, including without limitation the rights
-*  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-*  copies of the Software, and to permit persons to whom the Software is
-*  furnished to do so, subject to the following conditions:
-*
-*  The above copyright notice and this permission notice shall be included in
-*  all copies or substantial portions of the Software.
-*
-*  THE SOFTWARE IS PROVIDED *AS IS*, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-*  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-*  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-*  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-*  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-*  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-*  THE SOFTWARE.
-*/
 "use strict";
 
 import "core-js/stable";
@@ -35,47 +10,178 @@ import EnumerateVisualObjectInstancesOptions = powerbi.EnumerateVisualObjectInst
 import VisualObjectInstance = powerbi.VisualObjectInstance;
 import DataView = powerbi.DataView;
 import VisualObjectInstanceEnumerationObject = powerbi.VisualObjectInstanceEnumerationObject;
+import IVisualHost = powerbi.extensibility.visual.IVisualHost;
+import { dataViewObjects } from "powerbi-visuals-utils-dataviewutils";
 
-import { VisualSettings } from "./settings";
+
+
+class VisualSettings {
+    title: {
+      text: string;
+      hide: boolean;
+      fontSizeTitle: number;
+    };
+  
+    colorSelector: {
+      fill: string;
+    };
+  
+    generalView: {
+      arrow: boolean;
+    }
+}
+
+interface DataPoint{
+    data: number;
+}
+
+interface ViewModel {
+    dataPoint: DataPoint;
+    settings: VisualSettings;
+}
+
+let defaultSettings: VisualSettings = {
+    colorSelector: {
+        fill: '#000'
+    },  
+    title:{
+        fontSizeTitle:10,
+        hide: false,
+        text: 'EXPECTED'
+    },
+    generalView:{
+        arrow: true
+    }
+};
+
+
+function visualTransform(options: VisualUpdateOptions, host: IVisualHost): ViewModel {
+    let dataViews = options.dataViews;
+    let viewModel: ViewModel = {
+        dataPoint: null,
+        settings: <VisualSettings>{}
+    };
+
+    if (!dataViews
+        || !dataViews[0]
+        || !dataViews[0].categorical
+        || !dataViews[0].categorical.values
+        || !dataViews[0].categorical.values[0].source
+    ) {
+        return viewModel;
+    }
+
+    let categorical = dataViews[0].categorical;
+
+    let dataValue = categorical.values;
+
+    let objects = dataViews[0].metadata.objects;
+
+    let settings: VisualSettings = {
+        colorSelector: {
+            fill: dataViewObjects.getValue(objects, {
+                objectName: "colorSelector", propertyName: "fill",
+            }, defaultSettings.colorSelector.fill),
+        },
+        generalView: {
+            arrow: dataViewObjects.getValue(objects, {
+                objectName: "generalView", propertyName: "arrow",
+            }, defaultSettings.generalView.arrow),
+        },
+        title:{
+            fontSizeTitle: dataViewObjects.getValue(objects, {
+                objectName: "title", propertyName: "fontSizeTitle",
+            }, defaultSettings.title.fontSizeTitle),
+            hide: dataViewObjects.getValue(objects, {
+                objectName: "title", propertyName: "hide",
+            }, defaultSettings.title.hide),
+            text: dataViewObjects.getValue(objects, {
+                objectName: "title", propertyName: "text",
+            }, defaultSettings.title.text),
+        }     
+    };
+
+    return {
+        dataPoint: null,
+        settings: settings
+    };
+}
+
+
+
+
 export class Visual implements IVisual {
-    private target: HTMLElement;
-    private updateCount: number;
     private settings: VisualSettings;
-    private textNode: Text;
+    private host: IVisualHost;
+    private element: HTMLElement;
+
 
     constructor(options: VisualConstructorOptions) {
-        console.log('Visual constructor', options);
-        this.target = options.element;
-        this.updateCount = 0;
-        if (document) {
-            const new_p: HTMLElement = document.createElement("p");
-            new_p.appendChild(document.createTextNode("Update count:"));
-            const new_em: HTMLElement = document.createElement("em");
-            this.textNode = document.createTextNode(this.updateCount.toString());
-            new_em.appendChild(this.textNode);
-            new_p.appendChild(new_em);
-            this.target.appendChild(new_p);
-        }
+        this.host = options.host;
+        this.element = options.element;
     }
 
     public update(options: VisualUpdateOptions) {
-        this.settings = Visual.parseSettings(options && options.dataViews && options.dataViews[0]);
-        console.log('Visual update', options);
-        if (this.textNode) {
-            this.textNode.textContent = (this.updateCount++).toString();
+        let viewModel: ViewModel = visualTransform(options, this.host);
+        this.settings = viewModel.settings;
+        console.log(viewModel);
+        
+    }
+
+
+    public enumerateObjectInstances(options: EnumerateVisualObjectInstancesOptions): powerbi.VisualObjectInstanceEnumeration {
+        let objectName = options.objectName;
+        let objectEnumeration: VisualObjectInstance[] = [];
+
+        if (!this.settings ||
+            !this.settings.colorSelector ||
+            !this.settings.generalView ||
+            !this.settings.title) {
+            return objectEnumeration;
         }
-    }
 
-    private static parseSettings(dataView: DataView): VisualSettings {
-        return <VisualSettings>VisualSettings.parse(dataView);
-    }
-
-    /**
-     * This function gets called for each of the objects defined in the capabilities files and allows you to select which of the
-     * objects and properties you want to expose to the users in the property pane.
-     *
-     */
-    public enumerateObjectInstances(options: EnumerateVisualObjectInstancesOptions): VisualObjectInstance[] | VisualObjectInstanceEnumerationObject {
-        return VisualSettings.enumerateObjectInstances(this.settings || VisualSettings.getDefault(), options);
+        switch (objectName) {
+            case 'title':
+                objectEnumeration.push({
+                    objectName: objectName,
+                    properties: {
+                        text: this.settings.title.text,
+                        hide: this.settings.title.hide,
+                        fontSizeTitle: this.settings.title.fontSizeTitle
+                    },
+                    validValues: {
+                        fontSizeTitle: {
+                            numberRange: {
+                                min: 6,
+                                max: 40
+                            }
+                        }
+                    },
+                    selector: null
+                });
+                break;
+            case 'generalView':
+                objectEnumeration.push({
+                    objectName: objectName,
+                    properties: {
+                        arrow: this.settings.generalView.arrow
+                    },
+                    selector: null
+                });
+                break;                
+            case 'colorSelector':
+                objectEnumeration.push({
+                    objectName: objectName,
+                    properties: {
+                        fill: this.settings.colorSelector.fill
+                    },
+                    selector: null
+                });
+                break;
+        };
+        return objectEnumeration;
     }
 }
+
+
+
