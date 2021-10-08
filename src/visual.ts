@@ -1,5 +1,7 @@
 "use strict";
-
+import {
+    select as d3Select
+} from "d3-selection";
 import "core-js/stable";
 import "./../style/visual.less";
 import powerbi from "powerbi-visuals-api";
@@ -12,7 +14,7 @@ import DataView = powerbi.DataView;
 import VisualObjectInstanceEnumerationObject = powerbi.VisualObjectInstanceEnumerationObject;
 import IVisualHost = powerbi.extensibility.visual.IVisualHost;
 import { dataViewObjects } from "powerbi-visuals-utils-dataviewutils";
-
+type Selection<T1, T2 = T1> = d3.Selection<any, T1, any, T2>;
 
 
 class VisualSettings {
@@ -77,11 +79,12 @@ function visualTransform(options: VisualUpdateOptions, host: IVisualHost): ViewM
 
     let objects = dataViews[0].metadata.objects;
 
+
+     
+
     let settings: VisualSettings = {
         colorSelector: {
-            fill: dataViewObjects.getValue(objects, {
-                objectName: "colorSelector", propertyName: "fill",
-            }, defaultSettings.colorSelector.fill),
+            fill: (<powerbi.Fill>(dataViewObjects.getObject(objects, "colorSelector", {fill:{solid:{color:defaultSettings.colorSelector.fill}}}).fill)).solid.color
         },
         generalView: {
             arrow: dataViewObjects.getValue(objects, {
@@ -113,18 +116,54 @@ function visualTransform(options: VisualUpdateOptions, host: IVisualHost): ViewM
 export class Visual implements IVisual {
     private settings: VisualSettings;
     private host: IVisualHost;
-    private element: HTMLElement;
+    private svg: Selection<any>;
+    private outerContainer: Selection<any>;
+    private circleContainer: Selection<any>;
+    private titleContainer: Selection<any>;
+    private dataContainer: Selection<any>;
+    private arrowContainer: Selection<any>;
+    private valueContainer: Selection<any>;
 
 
     constructor(options: VisualConstructorOptions) {
         this.host = options.host;
-        this.element = options.element;
+
+        this.svg = d3Select(options.element)
+            .append('svg')
+
+        this.outerContainer = this.svg
+            .append('g')
+
+        this.circleContainer = this.outerContainer
+            .append('g')
+
+        this.dataContainer = this.outerContainer
+            .append('g')
+
+        this.titleContainer = this.dataContainer
+            .append('g')
+
+        this.arrowContainer = this.dataContainer
+            .append('g')
+
+        this.valueContainer = this.dataContainer
+            .append('g')
     }
 
     public update(options: VisualUpdateOptions) {
         let viewModel: ViewModel = visualTransform(options, this.host);
         this.settings = viewModel.settings;
-        console.log(viewModel);
+        
+        //this.outerContainer = this.outerContainer.data()
+
+        this.circleContainer
+            .append('circle')
+            .attr('cx', 100)
+            .attr('cy', 100)
+            .attr('r', 50)
+            .style('stroke-width', 2)
+            .style('stroke', this.settings.colorSelector.fill)
+
         
     }
 
