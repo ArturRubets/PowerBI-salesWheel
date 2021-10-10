@@ -13,28 +13,35 @@ import VisualObjectInstance = powerbi.VisualObjectInstance;
 import DataView = powerbi.DataView;
 import VisualObjectInstanceEnumerationObject = powerbi.VisualObjectInstanceEnumerationObject;
 import IVisualHost = powerbi.extensibility.visual.IVisualHost;
+import PrimitiveValue = powerbi.PrimitiveValue;
+import IVisualEventService = powerbi.extensibility.IVisualEventService;
 import { dataViewObjects } from "powerbi-visuals-utils-dataviewutils";
+import { Primitive } from "d3-array";
 type Selection<T1, T2 = T1> = d3.Selection<any, T1, any, T2>;
+import * as d3 from "d3";
 
 
 class VisualSettings {
     title: {
-      text: string;
-      hide: boolean;
-      fontSizeTitle: number;
+        hide: boolean;
+        fontSizeTitle: number;
     };
-  
-    colorSelector: {
-      fill: string;
-    };
-  
+
+
     generalView: {
-      arrow: boolean;
+        arrow: boolean;
+    };
+
+    circle: {
+        strokeWidth: number;
+        fillOuter: string;
+        fillInner: string;
     }
 }
 
-interface DataPoint{
-    data: number;
+interface DataPoint {
+    data: PrimitiveValue;
+    title: string;
 }
 
 interface ViewModel {
@@ -43,16 +50,17 @@ interface ViewModel {
 }
 
 let defaultSettings: VisualSettings = {
-    colorSelector: {
-        fill: '#000'
-    },  
-    title:{
-        fontSizeTitle:10,
+    title: {
+        fontSizeTitle: 10,
         hide: false,
-        text: 'EXPECTED'
     },
-    generalView:{
+    generalView: {
         arrow: true
+    },
+    circle: {
+        strokeWidth: 10,
+        fillOuter: '#5161B4',
+        fillInner: '#F1F3FE'
     }
 };
 
@@ -75,37 +83,40 @@ function visualTransform(options: VisualUpdateOptions, host: IVisualHost): ViewM
 
     let categorical = dataViews[0].categorical;
 
-    let dataValue = categorical.values;
+    let values = categorical.values;
 
     let objects = dataViews[0].metadata.objects;
 
 
-     
-
     let settings: VisualSettings = {
-        colorSelector: {
-            fill: (<powerbi.Fill>(dataViewObjects.getObject(objects, "colorSelector", {fill:{solid:{color:defaultSettings.colorSelector.fill}}}).fill)).solid.color
-        },
         generalView: {
             arrow: dataViewObjects.getValue(objects, {
                 objectName: "generalView", propertyName: "arrow",
             }, defaultSettings.generalView.arrow),
         },
-        title:{
+        title: {
             fontSizeTitle: dataViewObjects.getValue(objects, {
                 objectName: "title", propertyName: "fontSizeTitle",
             }, defaultSettings.title.fontSizeTitle),
             hide: dataViewObjects.getValue(objects, {
                 objectName: "title", propertyName: "hide",
             }, defaultSettings.title.hide),
-            text: dataViewObjects.getValue(objects, {
-                objectName: "title", propertyName: "text",
-            }, defaultSettings.title.text),
-        }     
+        },
+
+        circle: {
+            strokeWidth: dataViewObjects.getValue(objects, {
+                objectName: "circle", propertyName: "strokeWidth",
+            }, defaultSettings.circle.strokeWidth),
+            fillInner: dataViewObjects.getFillColor(objects, {objectName: 'circle', propertyName: 'fillInner'}, defaultSettings.circle.fillInner),
+            fillOuter: dataViewObjects.getFillColor(objects, {objectName: 'circle', propertyName: 'fillOuter'}, defaultSettings.circle.fillOuter),
+        }
     };
 
+
+    let dataPoint: DataPoint = { data: values[0].values[0], title: values[0].source.displayName };
+
     return {
-        dataPoint: null,
+        dataPoint: dataPoint,
         settings: settings
     };
 }
@@ -114,6 +125,9 @@ function visualTransform(options: VisualUpdateOptions, host: IVisualHost): ViewM
 
 
 export class Visual implements IVisual {
+    private events: IVisualEventService;
+    private element: HTMLElement;
+
     private settings: VisualSettings;
     private host: IVisualHost;
     private svg: Selection<any>;
@@ -124,8 +138,11 @@ export class Visual implements IVisual {
     private arrowContainer: Selection<any>;
     private valueContainer: Selection<any>;
 
+    private dataPoint: DataPoint;
 
     constructor(options: VisualConstructorOptions) {
+        this.events = options.host.eventService;
+        this.element = options.element;
         this.host = options.host;
 
         this.svg = d3Select(options.element)
@@ -148,23 +165,37 @@ export class Visual implements IVisual {
 
         this.valueContainer = this.dataContainer
             .append('g')
+
+            
     }
 
     public update(options: VisualUpdateOptions) {
+        this.events.renderingStarted(options);
+
         let viewModel: ViewModel = visualTransform(options, this.host);
         this.settings = viewModel.settings;
+        this.dataPoint = viewModel.dataPoint;
         
-        //this.outerContainer = this.outerContainer.data()
+        this.checkTypeData()
+        let data = (this.dataPoint.data as number)
 
-        this.circleContainer
-            .append('circle')
-            .attr('cx', 100)
-            .attr('cy', 100)
-            .attr('r', 50)
-            .style('stroke-width', 2)
-            .style('stroke', this.settings.colorSelector.fill)
+        let width = options.viewport.width;
+        let height = options.viewport.height;
+        this.svg.attr("width", width).attr("height", height);
 
+
+        let padding = Math.min(width, height) * 0.05    //Отступ всего элемента 5%
+
+
+        let circleParam = this.getCircleParam(width, height, padding, data)
         
+        //При более 100% 5сек, если меньше то на каждый процент 34милс
+        let durationAnimation = data > 1 ? 5000: data % 1 * 100 * 34            
+        this.drawCircle(circleParam, options, durationAnimation, 500)
+
+
+
+
     }
 
 
@@ -173,7 +204,7 @@ export class Visual implements IVisual {
         let objectEnumeration: VisualObjectInstance[] = [];
 
         if (!this.settings ||
-            !this.settings.colorSelector ||
+            !this.settings.circle ||
             !this.settings.generalView ||
             !this.settings.title) {
             return objectEnumeration;
@@ -184,7 +215,6 @@ export class Visual implements IVisual {
                 objectEnumeration.push({
                     objectName: objectName,
                     properties: {
-                        text: this.settings.title.text,
                         hide: this.settings.title.hide,
                         fontSizeTitle: this.settings.title.fontSizeTitle
                     },
@@ -207,18 +237,89 @@ export class Visual implements IVisual {
                     },
                     selector: null
                 });
-                break;                
-            case 'colorSelector':
+                break;
+            case 'circle':
                 objectEnumeration.push({
                     objectName: objectName,
                     properties: {
-                        fill: this.settings.colorSelector.fill
+                        strokeWidth: this.settings.circle.strokeWidth,
+                        fillInner: this.settings.circle.fillInner,
+                        fillOuter: this.settings.circle.fillOuter
                     },
                     selector: null
                 });
                 break;
         };
         return objectEnumeration;
+    }
+
+    private checkTypeData(){
+        if (typeof (this.dataPoint.data as number) != 'number') {
+            return
+        }
+    }
+
+    private getCircleParam(widthVisual, heightVisual, padding, data){
+        let strokeWidth = this.settings.circle.strokeWidth
+        let widthCircle = widthVisual * 0.35
+        let heightCircle = heightVisual
+        let radiusCircle = Math.min(widthCircle / 2, heightCircle / 2) - strokeWidth / 2 - padding
+        let centerCircleX = widthCircle / 2;
+        let centerCircleY = heightCircle / 2;
+        
+        
+        let lengthCircle = 2 * Math.PI * radiusCircle
+        let percentFill = data
+        
+        let lengthFill = lengthCircle * percentFill
+        let lengthOffset = lengthCircle / 4
+
+        return {
+            strokeWidth,
+            widthCircle,
+            heightCircle,
+            radiusCircle,
+            centerCircleX,
+            centerCircleY,
+            lengthCircle,
+            percentFill,
+            lengthFill,
+            lengthOffset,
+            fillInner: this.settings.circle.fillInner,
+            fillOuter: this.settings.circle.fillOuter
+        }
+    }
+    private drawCircle(circleParam, options, duration, delay){
+        this.circleContainer.html('')
+
+        this.circleContainer
+            .append('circle')
+            .attr('cx', circleParam.centerCircleX)
+            .attr('cy', circleParam.centerCircleY)
+            .attr('r', circleParam.radiusCircle)
+            .style('stroke-width', circleParam.strokeWidth)
+            .style('stroke', circleParam.fillInner)
+
+        this.circleContainer
+            .append('circle')
+            .attr('id', 'target')
+            .attr('cx', circleParam.centerCircleX)
+            .attr('cy', circleParam.centerCircleY)
+            .attr('r', circleParam.radiusCircle)            
+            .style('stroke-width', circleParam.strokeWidth)
+            .style('stroke', circleParam.fillOuter)
+            .attr('stroke-dashoffset', circleParam.lengthOffset)    
+            .attr('stroke-dasharray', `0, ${circleParam.lengthCircle}`)
+
+        d3.select('#target')
+            .transition()
+            .duration(duration)   
+            .delay(delay)        
+            .attr('stroke-dasharray', `${circleParam.lengthFill}, ${circleParam.lengthCircle - circleParam.lengthFill}`)
+            .end()
+            .then(() =>{
+                this.events.renderingFinished(options);
+            })
     }
 }
 

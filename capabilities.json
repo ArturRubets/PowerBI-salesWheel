@@ -10,12 +10,6 @@
         "title":{
             "displayName": "Title",
             "properties": {
-                "text": {
-                    "displayName": "Text",
-                    "type": {
-                        "text": true
-                    }
-                },
                 "hide": {
                     "displayName": "Hide",
                     "type": {
@@ -30,21 +24,6 @@
                 }
             }
         },
-        "colorSelector": {
-            "displayName": "Data Colors",
-            "properties": {
-                "fill": {
-                    "displayName": "Color",
-                    "type": {
-                        "fill": {
-                            "solid": {
-                                "color": true
-                            }
-                        }
-                    }
-                }
-            }
-        },
         "generalView": {
             "displayName": "General View",
             "properties": {
@@ -52,6 +31,37 @@
                     "displayName": "Enable arrow up",
                     "type": {
                         "bool": true
+                    }
+                }
+            }
+        },
+        "circle":{
+            "displayName": "Circle",
+            "properties": {
+                "strokeWidth": {
+                    "displayName": "strokeWidth",
+                    "type": {
+                        "numeric": true
+                    }
+                },
+                "fillOuter": {
+                    "displayName": "Color outer",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "fillInner": {
+                    "displayName": "Color inner",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
                     }
                 }
             }
