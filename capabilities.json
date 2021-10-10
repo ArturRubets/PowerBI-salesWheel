@@ -38,7 +38,7 @@
         "circle":{
             "displayName": "Circle",
             "properties": {
-                "strokeWidth": {
+                "stroke": {
                     "displayName": "strokeWidth",
                     "type": {
                         "numeric": true

@@ -33,7 +33,7 @@ class VisualSettings {
     };
 
     circle: {
-        strokeWidth: number;
+        stroke: number;
         fillOuter: string;
         fillInner: string;
     }
@@ -51,14 +51,14 @@ interface ViewModel {
 
 let defaultSettings: VisualSettings = {
     title: {
-        fontSizeTitle: 10,
+        fontSizeTitle: 15,
         hide: false,
     },
     generalView: {
         arrow: true
     },
     circle: {
-        strokeWidth: 10,
+        stroke: 10,
         fillOuter: '#5161B4',
         fillInner: '#F1F3FE'
     }
@@ -104,9 +104,9 @@ function visualTransform(options: VisualUpdateOptions, host: IVisualHost): ViewM
         },
 
         circle: {
-            strokeWidth: dataViewObjects.getValue(objects, {
-                objectName: "circle", propertyName: "strokeWidth",
-            }, defaultSettings.circle.strokeWidth),
+            stroke: dataViewObjects.getValue(objects, {
+                objectName: "circle", propertyName: "stroke",
+            }, defaultSettings.circle.stroke),
             fillInner: dataViewObjects.getFillColor(objects, {objectName: 'circle', propertyName: 'fillInner'}, defaultSettings.circle.fillInner),
             fillOuter: dataViewObjects.getFillColor(objects, {objectName: 'circle', propertyName: 'fillOuter'}, defaultSettings.circle.fillOuter),
         }
@@ -148,25 +148,18 @@ export class Visual implements IVisual {
         this.svg = d3Select(options.element)
             .append('svg')
 
-        this.outerContainer = this.svg
+
+        this.circleContainer = this.svg
             .append('g')
 
-        this.circleContainer = this.outerContainer
-            .append('g')
-
-        this.dataContainer = this.outerContainer
-            .append('g')
-
+        this.dataContainer = this.svg
+            .append('g')    
+            
         this.titleContainer = this.dataContainer
             .append('g')
-
-        this.arrowContainer = this.dataContainer
-            .append('g')
-
+            
         this.valueContainer = this.dataContainer
             .append('g')
-
-            
     }
 
     public update(options: VisualUpdateOptions) {
@@ -174,10 +167,13 @@ export class Visual implements IVisual {
 
         let viewModel: ViewModel = visualTransform(options, this.host);
         this.settings = viewModel.settings;
-        this.dataPoint = viewModel.dataPoint;
+        this.dataPoint = viewModel.dataPoint;      
         
-        this.checkTypeData()
-        let data = (this.dataPoint.data as number)
+        if (typeof (this.dataPoint.data as number) != 'number' || (this.dataPoint.data as number) < 0) {
+            return
+        }
+
+        let data = Number((this.dataPoint.data as number).toFixed(4))
 
         let width = options.viewport.width;
         let height = options.viewport.height;
@@ -194,8 +190,53 @@ export class Visual implements IVisual {
         this.drawCircle(circleParam, options, durationAnimation, 500)
 
 
+        this.drawTitle(circleParam)
 
 
+      
+        this.valueContainer.html('')
+        let valueX = circleParam.centerCircleX + circleParam.radiusCircle * 1.38 + circleParam.strokeWidth
+        let valueY = circleParam.centerCircleY + circleParam.radiusCircle + circleParam.strokeWidth / 2
+
+        let fontSizeData = circleParam.radiusCircle + circleParam.strokeWidth
+        let text = this.valueContainer
+            .append('text')
+            .text(`${data * 100}%`)
+            .attr('x', valueX)
+            .attr('y', valueY)
+            .style('font-size',  fontSizeData)
+            .style('fill', this.settings.circle.fillOuter)
+            .style('font-weight', 600)
+
+        this.valueContainer
+                .append('defs')
+                .append('marker')
+                .attr('id', 'arrow')
+                .attr('markerUnits', 'strokeWidth')
+                .attr('markerWidth', fontSizeData / 15)
+                .attr('markerHeight', fontSizeData / 15)
+                .attr('viewBox', '0 0 20 20')
+                .attr('refX', 10)
+                .attr('refY', 10)
+                .attr('orient', 'auto')
+                .append('path')
+                .attr('d', 'M2,2 L10,6 L2,10 L6,6 L2,2')
+                .style('fill', 'red')
+                
+        let valueDom = text.node().getBBox()
+        let arrowX = valueDom.x + valueDom.width * 1.1
+        let arrowY = valueY
+        this.valueContainer
+            .append('line')
+            .attr('x1', arrowX)
+            .attr('y1', arrowY)
+            .attr('x2', arrowX)
+            .attr('y2', arrowY - valueDom.height / 3)
+            .style('stroke', 'red')
+            .style('stroke-width', fontSizeData / 15)
+            .attr('marker-end', "url(#arrow)").node()
+
+            
     }
 
 
@@ -222,7 +263,7 @@ export class Visual implements IVisual {
                         fontSizeTitle: {
                             numberRange: {
                                 min: 6,
-                                max: 40
+                                max: 60
                             }
                         }
                     },
@@ -242,9 +283,17 @@ export class Visual implements IVisual {
                 objectEnumeration.push({
                     objectName: objectName,
                     properties: {
-                        strokeWidth: this.settings.circle.strokeWidth,
+                        stroke: this.settings.circle.stroke,
                         fillInner: this.settings.circle.fillInner,
                         fillOuter: this.settings.circle.fillOuter
+                    },
+                    validValues: {
+                        stroke: {
+                            numberRange: {
+                                min: 0,
+                                max: 50
+                            }
+                        }
                     },
                     selector: null
                 });
@@ -253,17 +302,17 @@ export class Visual implements IVisual {
         return objectEnumeration;
     }
 
-    private checkTypeData(){
-        if (typeof (this.dataPoint.data as number) != 'number') {
-            return
-        }
-    }
 
     private getCircleParam(widthVisual, heightVisual, padding, data){
-        let strokeWidth = this.settings.circle.strokeWidth
+        let strokeWidth = this.settings.circle.stroke
         let widthCircle = widthVisual * 0.35
         let heightCircle = heightVisual
         let radiusCircle = Math.min(widthCircle / 2, heightCircle / 2) - strokeWidth / 2 - padding
+        if(strokeWidth >= radiusCircle){
+            strokeWidth = Math.floor(radiusCircle)
+            this.settings.circle.stroke = strokeWidth
+            radiusCircle = Math.min(widthCircle / 2, heightCircle / 2) - strokeWidth / 2 - padding
+        }
         let centerCircleX = widthCircle / 2;
         let centerCircleY = heightCircle / 2;
         
@@ -320,6 +369,23 @@ export class Visual implements IVisual {
             .then(() =>{
                 this.events.renderingFinished(options);
             })
+    }
+
+    private drawTitle(circleParam){
+        this.titleContainer.html('')
+        let titleX = circleParam.centerCircleX + circleParam.radiusCircle * 1.38 + circleParam.strokeWidth
+        let titleY = circleParam.centerCircleY - circleParam.radiusCircle - circleParam.strokeWidth / 2  + this.settings.title.fontSizeTitle
+        if(!this.settings.title.hide){
+            let title = this.dataPoint.title
+            this.titleContainer
+                .append('text')
+                .text(title)
+                .attr('x', titleX)
+                .attr('y', titleY)
+                .style('font-size', this.settings.title.fontSizeTitle)
+                .style('fill', 'rgb(160, 160, 160)')
+                .style('font-weight', 600)
+        }
     }
 }
 
