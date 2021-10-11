@@ -30,6 +30,8 @@ class VisualSettings {
 
     generalView: {
         arrow: boolean;
+        fontSizeValue: number;
+        fillArrow: string;
     };
 
     circle: {
@@ -51,11 +53,13 @@ interface ViewModel {
 
 let defaultSettings: VisualSettings = {
     title: {
-        fontSizeTitle: 15,
+        fontSizeTitle: null,
         hide: false,
     },
     generalView: {
-        arrow: true
+        arrow: true,
+        fontSizeValue: null,
+        fillArrow: '#8CA89E'
     },
     circle: {
         stroke: 10,
@@ -93,6 +97,10 @@ function visualTransform(options: VisualUpdateOptions, host: IVisualHost): ViewM
             arrow: dataViewObjects.getValue(objects, {
                 objectName: "generalView", propertyName: "arrow",
             }, defaultSettings.generalView.arrow),
+            fontSizeValue: dataViewObjects.getValue(objects, {
+                objectName: "generalView", propertyName: "fontSizeValue",
+            }, defaultSettings.generalView.fontSizeValue),
+            fillArrow: dataViewObjects.getFillColor(objects, { objectName: 'generalView', propertyName: 'fillArrow' }, defaultSettings.generalView.fillArrow),
         },
         title: {
             fontSizeTitle: dataViewObjects.getValue(objects, {
@@ -107,8 +115,8 @@ function visualTransform(options: VisualUpdateOptions, host: IVisualHost): ViewM
             stroke: dataViewObjects.getValue(objects, {
                 objectName: "circle", propertyName: "stroke",
             }, defaultSettings.circle.stroke),
-            fillInner: dataViewObjects.getFillColor(objects, {objectName: 'circle', propertyName: 'fillInner'}, defaultSettings.circle.fillInner),
-            fillOuter: dataViewObjects.getFillColor(objects, {objectName: 'circle', propertyName: 'fillOuter'}, defaultSettings.circle.fillOuter),
+            fillInner: dataViewObjects.getFillColor(objects, { objectName: 'circle', propertyName: 'fillInner' }, defaultSettings.circle.fillInner),
+            fillOuter: dataViewObjects.getFillColor(objects, { objectName: 'circle', propertyName: 'fillOuter' }, defaultSettings.circle.fillOuter),
         }
     };
 
@@ -126,23 +134,19 @@ function visualTransform(options: VisualUpdateOptions, host: IVisualHost): ViewM
 
 export class Visual implements IVisual {
     private events: IVisualEventService;
-    private element: HTMLElement;
-
     private settings: VisualSettings;
     private host: IVisualHost;
     private svg: Selection<any>;
-    private outerContainer: Selection<any>;
     private circleContainer: Selection<any>;
     private titleContainer: Selection<any>;
     private dataContainer: Selection<any>;
-    private arrowContainer: Selection<any>;
     private valueContainer: Selection<any>;
 
     private dataPoint: DataPoint;
 
+
     constructor(options: VisualConstructorOptions) {
         this.events = options.host.eventService;
-        this.element = options.element;
         this.host = options.host;
 
         this.svg = d3Select(options.element)
@@ -153,27 +157,29 @@ export class Visual implements IVisual {
             .append('g')
 
         this.dataContainer = this.svg
-            .append('g')    
-            
+            .append('g')
+
         this.titleContainer = this.dataContainer
             .append('g')
-            
+
         this.valueContainer = this.dataContainer
             .append('g')
     }
 
     public update(options: VisualUpdateOptions) {
+        this.valueContainer.html('')
         this.events.renderingStarted(options);
 
         let viewModel: ViewModel = visualTransform(options, this.host);
         this.settings = viewModel.settings;
-        this.dataPoint = viewModel.dataPoint;      
-        
+        this.dataPoint = viewModel.dataPoint;
+
         if (typeof (this.dataPoint.data as number) != 'number' || (this.dataPoint.data as number) < 0) {
             return
         }
 
         let data = Number((this.dataPoint.data as number).toFixed(4))
+
 
         let width = options.viewport.width;
         let height = options.viewport.height;
@@ -184,59 +190,35 @@ export class Visual implements IVisual {
 
 
         let circleParam = this.getCircleParam(width, height, padding, data)
-        
-        //При более 100% 5сек, если меньше то на каждый процент 34милс
-        let durationAnimation = data > 1 ? 5000: data % 1 * 100 * 34            
-        this.drawCircle(circleParam, options, durationAnimation, 500)
 
+        //При более 100% 5сек, если меньше то на каждый процент 34милс
+        let duration = data > 1 ? 5000 : data % 1 * 100 * 34
+        let delay = 500
+        this.drawCircle(circleParam, options, duration, delay)
 
         this.drawTitle(circleParam)
 
-
-      
-        this.valueContainer.html('')
+        
         let valueX = circleParam.centerCircleX + circleParam.radiusCircle * 1.38 + circleParam.strokeWidth
         let valueY = circleParam.centerCircleY + circleParam.radiusCircle + circleParam.strokeWidth / 2
 
-        let fontSizeData = circleParam.radiusCircle + circleParam.strokeWidth
+        let fontSizeData = this.settings.generalView.fontSizeValue ? this.settings.generalView.fontSizeValue :
+            circleParam.radiusCircle + circleParam.strokeWidth / 2
+ 
         let text = this.valueContainer
             .append('text')
-            .text(`${data * 100}%`)
+            .text(`${(data * 100).toFixed(0)}%`)
             .attr('x', valueX)
             .attr('y', valueY)
-            .style('font-size',  fontSizeData)
+            .style('font-size', fontSizeData)
             .style('fill', this.settings.circle.fillOuter)
             .style('font-weight', 600)
 
-        this.valueContainer
-                .append('defs')
-                .append('marker')
-                .attr('id', 'arrow')
-                .attr('markerUnits', 'strokeWidth')
-                .attr('markerWidth', fontSizeData / 15)
-                .attr('markerHeight', fontSizeData / 15)
-                .attr('viewBox', '0 0 20 20')
-                .attr('refX', 10)
-                .attr('refY', 10)
-                .attr('orient', 'auto')
-                .append('path')
-                .attr('d', 'M2,2 L10,6 L2,10 L6,6 L2,2')
-                .style('fill', 'red')
-                
-        let valueDom = text.node().getBBox()
-        let arrowX = valueDom.x + valueDom.width * 1.1
-        let arrowY = valueY
-        this.valueContainer
-            .append('line')
-            .attr('x1', arrowX)
-            .attr('y1', arrowY)
-            .attr('x2', arrowX)
-            .attr('y2', arrowY - valueDom.height / 3)
-            .style('stroke', 'red')
-            .style('stroke-width', fontSizeData / 15)
-            .attr('marker-end', "url(#arrow)").node()
-
-            
+        let valueDom = text.node().getBBox()        
+   
+        if(this.settings.generalView.arrow){
+            this.createArrow(valueDom,valueY,fontSizeData, options)   
+        }
     }
 
 
@@ -274,7 +256,17 @@ export class Visual implements IVisual {
                 objectEnumeration.push({
                     objectName: objectName,
                     properties: {
-                        arrow: this.settings.generalView.arrow
+                        arrow: this.settings.generalView.arrow,
+                        fontSizeValue: this.settings.generalView.fontSizeValue,
+                        fillArrow: this.settings.generalView.fillArrow
+                    },
+                    validValues: {
+                        fontSizeValue: {
+                            numberRange: {
+                                min: 0,
+                                max: 200
+                            }
+                        }
                     },
                     selector: null
                 });
@@ -303,23 +295,23 @@ export class Visual implements IVisual {
     }
 
 
-    private getCircleParam(widthVisual, heightVisual, padding, data){
+    private getCircleParam(widthVisual, heightVisual, padding, data) {
         let strokeWidth = this.settings.circle.stroke
         let widthCircle = widthVisual * 0.35
         let heightCircle = heightVisual
         let radiusCircle = Math.min(widthCircle / 2, heightCircle / 2) - strokeWidth / 2 - padding
-        if(strokeWidth >= radiusCircle){
+        if (strokeWidth >= radiusCircle) {
             strokeWidth = Math.floor(radiusCircle)
             this.settings.circle.stroke = strokeWidth
             radiusCircle = Math.min(widthCircle / 2, heightCircle / 2) - strokeWidth / 2 - padding
         }
         let centerCircleX = widthCircle / 2;
         let centerCircleY = heightCircle / 2;
-        
-        
+
+
         let lengthCircle = 2 * Math.PI * radiusCircle
         let percentFill = data
-        
+
         let lengthFill = lengthCircle * percentFill
         let lengthOffset = lengthCircle / 4
 
@@ -338,7 +330,7 @@ export class Visual implements IVisual {
             fillOuter: this.settings.circle.fillOuter
         }
     }
-    private drawCircle(circleParam, options, duration, delay){
+    private drawCircle(circleParam, options, duration, delay) {
         this.circleContainer.html('')
 
         this.circleContainer
@@ -354,35 +346,63 @@ export class Visual implements IVisual {
             .attr('id', 'target')
             .attr('cx', circleParam.centerCircleX)
             .attr('cy', circleParam.centerCircleY)
-            .attr('r', circleParam.radiusCircle)            
+            .attr('r', circleParam.radiusCircle)
             .style('stroke-width', circleParam.strokeWidth)
             .style('stroke', circleParam.fillOuter)
-            .attr('stroke-dashoffset', circleParam.lengthOffset)    
+            .attr('stroke-dashoffset', circleParam.lengthOffset)
             .attr('stroke-dasharray', `0, ${circleParam.lengthCircle}`)
 
         d3.select('#target')
             .transition()
-            .duration(duration)   
-            .delay(delay)        
+            .duration(duration)
+            .delay(delay)
             .attr('stroke-dasharray', `${circleParam.lengthFill}, ${circleParam.lengthCircle - circleParam.lengthFill}`)
             .end()
-            .then(() =>{
+            .then(() => {   
                 this.events.renderingFinished(options);
             })
     }
 
-    private drawTitle(circleParam){
+    private createArrow(valueDom, valueY , fontSizeData, options){
+        let arrowX = valueDom.x + valueDom.width * 1.1
+        let arrowY = valueY
+        let strokeWidthArrow = fontSizeData / 10
+        let heightArrow = valueDom.height / 2.5
+
+        this.valueContainer            
+            .append('path')
+            .attr('id', 'arrow')
+            .style('stroke', this.settings.generalView.fillArrow)
+            .style('stroke-width', strokeWidthArrow)
+            .style('fill', 'none')
+            .attr('stroke-linecap', 'round')
+            .attr('d', `M ${arrowX} ${arrowY} 
+                l 0 ${-(heightArrow)} 
+                m -${strokeWidthArrow / 15} 0
+                l -${heightArrow * 0.2} ${heightArrow * 0.2}
+                m ${heightArrow * 0.2 + strokeWidthArrow / 5} -${heightArrow * 0.2}
+                l ${heightArrow * 0.2} ${heightArrow * 0.2}
+            `)
+    }
+
+    private drawTitle(circleParam) {
         this.titleContainer.html('')
+        let fontSize = this.settings.title.fontSizeTitle ?
+            this.settings.title.fontSizeTitle :
+            circleParam.radiusCircle / 1.3
+
+
         let titleX = circleParam.centerCircleX + circleParam.radiusCircle * 1.38 + circleParam.strokeWidth
-        let titleY = circleParam.centerCircleY - circleParam.radiusCircle - circleParam.strokeWidth / 2  + this.settings.title.fontSizeTitle
-        if(!this.settings.title.hide){
+        let titleY = circleParam.centerCircleY - circleParam.radiusCircle - circleParam.strokeWidth / 2 
+        if (!this.settings.title.hide) {
             let title = this.dataPoint.title
             this.titleContainer
                 .append('text')
                 .text(title)
                 .attr('x', titleX)
                 .attr('y', titleY)
-                .style('font-size', this.settings.title.fontSizeTitle)
+                .attr('dominant-baseline', 'hanging')
+                .style('font-size', fontSize)
                 .style('fill', 'rgb(160, 160, 160)')
                 .style('font-weight', 600)
         }

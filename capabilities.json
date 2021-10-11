@@ -32,6 +32,22 @@
                     "type": {
                         "bool": true
                     }
+                },
+                "fillArrow": {
+                    "displayName": "Color arrow",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "fontSizeValue": {
+                    "displayName": "Font size value",
+                    "type": {
+                        "numeric": true
+                    }
                 }
             }
         },
