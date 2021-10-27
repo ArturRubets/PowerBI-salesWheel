@@ -32,6 +32,7 @@ class VisualSettings {
         arrow: boolean;
         fontSizeValue: number;
         fillArrow: string;
+        precision: number
     };
 
     circle: {
@@ -54,12 +55,13 @@ interface ViewModel {
 let defaultSettings: VisualSettings = {
     title: {
         fontSizeTitle: null,
-        hide: false,
+        hide: false
     },
     generalView: {
         arrow: true,
         fontSizeValue: null,
-        fillArrow: '#8CA89E'
+        fillArrow: '#8CA89E',
+        precision: 2
     },
     circle: {
         stroke: 10,
@@ -100,6 +102,9 @@ function visualTransform(options: VisualUpdateOptions, host: IVisualHost): ViewM
             fontSizeValue: dataViewObjects.getValue(objects, {
                 objectName: "generalView", propertyName: "fontSizeValue",
             }, defaultSettings.generalView.fontSizeValue),
+            precision: dataViewObjects.getValue(objects, {
+                objectName: "generalView", propertyName: "precision",
+            }, defaultSettings.generalView.precision),
             fillArrow: dataViewObjects.getFillColor(objects, { objectName: 'generalView', propertyName: 'fillArrow' }, defaultSettings.generalView.fillArrow),
         },
         title: {
@@ -119,9 +124,7 @@ function visualTransform(options: VisualUpdateOptions, host: IVisualHost): ViewM
             fillOuter: dataViewObjects.getFillColor(objects, { objectName: 'circle', propertyName: 'fillOuter' }, defaultSettings.circle.fillOuter),
         }
     };
-
-
-    let dataPoint: DataPoint = { data: values[0].values[0], title: values[0].source.displayName };
+    let dataPoint: DataPoint = { data: values[0].values[0], title: values[1]?.values[0]?.toString() };
 
     return {
         dataPoint: dataPoint,
@@ -141,7 +144,6 @@ export class Visual implements IVisual {
     private titleContainer: Selection<any>;
     private dataContainer: Selection<any>;
     private valueContainer: Selection<any>;
-
     private dataPoint: DataPoint;
 
 
@@ -151,7 +153,6 @@ export class Visual implements IVisual {
 
         this.svg = d3Select(options.element)
             .append('svg')
-
 
         this.circleContainer = this.svg
             .append('g')
@@ -174,11 +175,11 @@ export class Visual implements IVisual {
         this.settings = viewModel.settings;
         this.dataPoint = viewModel.dataPoint;
 
-        if (typeof (this.dataPoint.data as number) != 'number' || (this.dataPoint.data as number) < 0) {
+        if (typeof (this.dataPoint.data as number) != 'number') {
             return
         }
 
-        let data = Number((this.dataPoint.data as number).toFixed(4))
+        let data = Number((this.dataPoint.data as number)) // предположительно дробное число меньше единицы
 
 
         let width = options.viewport.width;
@@ -191,6 +192,7 @@ export class Visual implements IVisual {
 
         let circleParam = this.getCircleParam(width, height, padding, data)
 
+
         //При более 100% 5сек, если меньше то на каждый процент 34милс
         let duration = data > 1 ? 5000 : data % 1 * 100 * 34
         let delay = 500
@@ -198,26 +200,28 @@ export class Visual implements IVisual {
 
         this.drawTitle(circleParam)
 
-        
+
         let valueX = circleParam.centerCircleX + circleParam.radiusCircle * 1.38 + circleParam.strokeWidth
         let valueY = circleParam.centerCircleY + circleParam.radiusCircle + circleParam.strokeWidth / 2
 
         let fontSizeData = this.settings.generalView.fontSizeValue ? this.settings.generalView.fontSizeValue :
             circleParam.radiusCircle + circleParam.strokeWidth / 2
- 
+
+        const showData = (data * 100).toFixed(this.settings.generalView.precision) // например число 0,35 умножаем на сто и получаем 35%
+
         let text = this.valueContainer
             .append('text')
-            .text(`${(data * 100).toFixed(0)}%`)
+            .text(`${showData}%`)
             .attr('x', valueX)
             .attr('y', valueY)
             .style('font-size', fontSizeData)
             .style('fill', this.settings.circle.fillOuter)
             .style('font-weight', 600)
 
-        let valueDom = text.node().getBBox()        
-   
-        if(this.settings.generalView.arrow){
-            this.createArrow(valueDom,valueY,fontSizeData, options)   
+        let valueDom = text.node().getBBox()
+
+        if (this.settings.generalView.arrow) {
+            this.createArrow(valueDom, valueY, fontSizeData, options)
         }
     }
 
@@ -239,7 +243,7 @@ export class Visual implements IVisual {
                     objectName: objectName,
                     properties: {
                         hide: this.settings.title.hide,
-                        fontSizeTitle: this.settings.title.fontSizeTitle
+                        fontSizeTitle: this.settings.title.fontSizeTitle,
                     },
                     validValues: {
                         fontSizeTitle: {
@@ -258,7 +262,8 @@ export class Visual implements IVisual {
                     properties: {
                         arrow: this.settings.generalView.arrow,
                         fontSizeValue: this.settings.generalView.fontSizeValue,
-                        fillArrow: this.settings.generalView.fillArrow
+                        fillArrow: this.settings.generalView.fillArrow,
+                        precision: this.settings.generalView.precision,
                     },
                     validValues: {
                         fontSizeValue: {
@@ -358,18 +363,18 @@ export class Visual implements IVisual {
             .delay(delay)
             .attr('stroke-dasharray', `${circleParam.lengthFill}, ${circleParam.lengthCircle - circleParam.lengthFill}`)
             .end()
-            .then(() => {   
+            .then(() => {
                 this.events.renderingFinished(options);
             })
     }
 
-    private createArrow(valueDom, valueY , fontSizeData, options){
+    private createArrow(valueDom, valueY, fontSizeData, options) {
         let arrowX = valueDom.x + valueDom.width * 1.1
         let arrowY = valueY
         let strokeWidthArrow = fontSizeData / 10
         let heightArrow = valueDom.height / 2.5
 
-        this.valueContainer            
+        this.valueContainer
             .append('path')
             .attr('id', 'arrow')
             .style('stroke', this.settings.generalView.fillArrow)
@@ -393,18 +398,35 @@ export class Visual implements IVisual {
 
 
         let titleX = circleParam.centerCircleX + circleParam.radiusCircle * 1.38 + circleParam.strokeWidth
-        let titleY = circleParam.centerCircleY - circleParam.radiusCircle - circleParam.strokeWidth / 2 
+        let titleY = circleParam.centerCircleY - circleParam.radiusCircle - circleParam.strokeWidth / 2
         if (!this.settings.title.hide) {
-            let title = this.dataPoint.title
-            this.titleContainer
+            let title = this.dataPoint.title.split('\n')
+
+            const text = this.titleContainer
                 .append('text')
-                .text(title)
                 .attr('x', titleX)
                 .attr('y', titleY)
+
+            const tspan1 = text.append('tspan')
+                .text(title[0])
                 .attr('dominant-baseline', 'hanging')
                 .style('font-size', fontSize)
                 .style('fill', 'rgb(160, 160, 160)')
                 .style('font-weight', 600)
+
+            let prevtspan = tspan1
+            title.forEach((t, i) => {
+                if (i > 0) {
+                    prevtspan = text.append('tspan')
+                        .text(t)
+                        .attr('dy', fontSize * 1.5)
+                        .attr('dx', -prevtspan.node().getBBox().width)
+                        .attr('dominant-baseline', 'hanging')
+                        .style('font-size', fontSize)
+                        .style('fill', 'rgb(160, 160, 160)')
+                        .style('font-weight', 600)
+                }
+            })
         }
     }
 }

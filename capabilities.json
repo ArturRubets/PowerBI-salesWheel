@@ -3,7 +3,14 @@
         {
             "displayName": "Data",
             "name": "measure",
-            "kind": "Measure"
+            "kind": "Measure",
+            "description": "Expecting a number less than one"
+        },
+        {
+            "displayName": "Title",
+            "name": "title",
+            "kind": "Measure",
+            "description": "Input text"
         }
     ],
     "objects": {
@@ -45,6 +52,12 @@
                 },
                 "fontSizeValue": {
                     "displayName": "Font size value",
+                    "type": {
+                        "numeric": true
+                    }
+                },
+                "precision": {
+                    "displayName": "Precision",
                     "type": {
                         "numeric": true
                     }
@@ -92,6 +105,11 @@
                             "bind": {
                                 "to": "measure"
                             }
+                        },
+                        {
+                            "for": {
+                                "in": "title"
+                            }
                         }
                     ]
                 }
@@ -99,6 +117,9 @@
             "conditions": [
                 {
                     "measure": {
+                        "max": 1
+                    },
+                    "title":{
                         "max": 1
                     }
                 }
